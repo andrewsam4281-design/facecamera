@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>FaceCall — Video Chat</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #34c759;
+    --red: #ff3b30;
+    --blue: #0a84ff;
+    --bg: #000;
+    --surface: rgba(255,255,255,0.12);
+    --surface-hover: rgba(255,255,255,0.2);
+    --text: #fff;
+    --text-muted: rgba(255,255,255,0.6);
+    --radius-pill: 50px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html, body {
+    height: 100%;
+    width: 100%;
+    background: #000;
+    font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    color: var(--text);
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.3s ease;
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  /* ── LOBBY ── */
+  #lobbyScreen {
+    background: linear-gradient(160deg, #0f0c29, #302b63, #24243e);
+    gap: 0;
+    padding: 0 28px;
+    padding-bottom: calc(32px + var(--safe-bottom));
+  }
+  .logo-area {
+    margin-bottom: 40px;
+    text-align: center;
+  }
+  .logo-icon {
+    width: 80px; height: 80px;
+    border-radius: 22px;
+    background: var(--blue);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 38px;
+    margin: 0 auto 16px;
+    box-shadow: 0 8px 32px rgba(10,132,255,0.4);
+  }
+  .logo-title {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    color: #fff;
+  }
+  .logo-sub {
+    font-size: 15px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .form-card {
+    width: 100%;
+    max-width: 360px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .input-group label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    display: block;
+  }
+  .input-group input {
+    width: 100%;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 16px;
+    color: #fff;
+    outline: none;
+    -webkit-appearance: none;
+    transition: border-color 0.2s;
+  }
+  .input-group input::placeholder { color: rgba(255,255,255,0.35); }
+  .input-group input:focus { border-color: var(--blue); }
+
+  .room-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .room-row .input-group { flex: 1; }
+  .copy-btn {
+    height: 48px;
+    padding: 0 14px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .copy-btn:active { background: rgba(255,255,255,0.25); }
+
+  .divider {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text-muted); font-size: 13px;
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1;
+    height: 1px; background: rgba(255,255,255,0.15);
+  }
+
+  .lobby-btns { display: flex; flex-direction: column; gap: 10px; }
+  .primary-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.15s;
+    letter-spacing: -0.2px;
+  }
+  .primary-btn:active { transform: scale(0.97); opacity: 0.85; }
+  .btn-start { background: var(--blue); color: #fff; }
+  .btn-join { background: var(--green); color: #fff; }
+
+  /* ── INCOMING ── */
+  #incomingScreen {
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    gap: 0;
+  }
+  .incoming-avatar {
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 44px; font-weight: 700;
+    margin-bottom: 20px;
+    box-shadow: 0 0 0 12px rgba(102,126,234,0.2), 0 0 0 24px rgba(102,126,234,0.1);
+    animation: pulse-ring 2s infinite;
+  }
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 8px rgba(102,126,234,0.3), 0 0 0 20px rgba(102,126,234,0.15); }
+    50% { box-shadow: 0 0 0 16px rgba(102,126,234,0.15), 0 0 0 32px rgba(102,126,234,0.05); }
+    100% { box-shadow: 0 0 0 8px rgba(102,126,234,0.3), 0 0 0 20px rgba(102,126,234,0.15); }
+  }
+  .incoming-name { font-size: 30px; font-weight: 700; letter-spacing: -0.5px; }
+  .incoming-sub { font-size: 16px; color: var(--text-muted); margin-top: 6px; margin-bottom: 60px; }
+  .incoming-actions {
+    display: flex;
+    gap: 64px;
+    align-items: center;
+  }
+  .action-btn {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 10px;
+  }
+  .action-btn span { font-size: 13px; color: var(--text-muted); }
+  .circle-btn {
+    width: 70px; height: 70px;
+    border-radius: 50%; border: none;
+    cursor: pointer; font-size: 28px;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.1s;
+  }
+  .circle-btn:active { transform: scale(0.9); }
+  .circle-btn.decline { background: var(--red); }
+  .circle-btn.answer { background: var(--green); }
+
+  /* ── CALL SCREEN ── */
+  #callScreen { background: #000; }
+
+  #remoteVideo {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    background: #111;
+  }
+  .remote-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px;
+    background: #1a1a2e;
+  }
+  .remote-placeholder .big-avatar {
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; font-weight: 700;
+  }
+  .remote-placeholder p { font-size: 16px; color: var(--text-muted); }
+
+  #localVideo {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    right: 16px;
+    width: 100px;
+    height: 140px;
+    border-radius: 16px;
+    object-fit: cover;
+    border: 2.5px solid #fff;
+    background: #222;
+    z-index: 10;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    transition: transform 0.2s;
+  }
+  #localVideo:active { transform: scale(0.95); }
+
+  .call-header {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
+    padding-bottom: 20px;
+    padding-left: 20px; padding-right: 140px;
+    z-index: 10;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%);
+  }
+  .call-name { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+  .call-status { font-size: 14px; color: var(--text-muted); margin-top: 2px; }
+  .call-timer { font-size: 14px; color: rgba(255,255,255,0.75); margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+  .call-controls {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding-bottom: calc(var(--safe-bottom) + 28px);
+    padding-top: 20px;
+    z-index: 10;
+    background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%);
+  }
+  .controls-row {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 18px;
+    padding: 0 20px;
+  }
+  .ctrl-item {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 8px;
+  }
+  .ctrl-label { font-size: 11px; color: rgba(255,255,255,0.7); }
+  .ctrl-btn {
+    width: 56px; height: 56px;
+    border-radius: 50%; border: none;
+    cursor: pointer; font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    transition: transform 0.1s, background 0.15s;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .ctrl-btn:active { transform: scale(0.9); }
+  .ctrl-btn.toggled { background: rgba(255,255,255,0.85); color: #1a1a1e; }
+  .ctrl-btn.end-btn { background: var(--red); width: 66px; height: 66px; font-size: 26px; }
+  .ctrl-btn.end-btn:active { background: #cc2f26; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: absolute;
+    bottom: calc(var(--safe-bottom) + 120px);
+    left: 50%; transform: translateX(-50%);
+    background: rgba(30,30,30,0.92);
+    color: #fff; font-size: 14px;
+    padding: 10px 20px; border-radius: 20px;
+    z-index: 50; white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .toast.show { opacity: 1; }
+
+  /* ── STATUS BADGE ── */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(52,199,89,0.2);
+    border: 1px solid rgba(52,199,89,0.4);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px; color: var(--green);
+    margin-bottom: 20px;
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%; background: var(--green);
+    animation: blink 1.5s infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── SIGNAL INDICATOR ── */
+  .signal-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-muted);
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<!-- LOBBY -->
+<div class="screen" id="lobbyScreen">
+  <div class="logo-area">
+    <div class="logo-icon">📹</div>
+    <div class="logo-title">FaceCall</div>
+    <div class="logo-sub">Crystal-clear video, anywhere</div>
+  </div>
+
+  <div class="form-card">
+    <div class="input-group">
+      <label>Your name</label>
+      <input type="text" id="nameInput" placeholder="Enter your name" autocomplete="off" />
+    </div>
+
+    <div class="divider">your room code</div>
+
+    <div class="room-row">
+      <div class="input-group">
+        <label>Share this code</label>
+        <input type="text" id="myRoomCode" readonly />
+      </div>
+      <button class="copy-btn" id="copyBtn" title="Copy room code">📋</button>
+    </div>
+
+    <div class="divider">or join a room</div>
+
+    <div class="input-group">
+      <label>Room code to join</label>
+      <input type="text" id="joinRoomInput" placeholder="Enter room code" autocomplete="off" autocapitalize="none" />
+    </div>
+
+    <div class="lobby-btns">
+      <button class="primary-btn btn-start" id="startBtn">📹 Start my room</button>
+      <button class="primary-btn btn-join" id="joinBtn">🔗 Join room</button>
+    </div>
+  </div>
+</div>
+
+<!-- INCOMING CALL -->
+<div class="screen hidden" id="incomingScreen">
+  <div class="incoming-avatar" id="incomingAvatar">?</div>
+  <div class="incoming-name" id="incomingName">Incoming call</div>
+  <div class="incoming-sub">FaceCall video</div>
+  <div class="incoming-actions">
+    <div class="action-btn">
+      <button class="circle-btn decline" id="declineBtn">📵</button>
+      <span>Decline</span>
+    </div>
+    <div class="action-btn">
+      <button class="circle-btn answer" id="answerBtn">📞</button>
+      <span>Accept</span>
+    </div>
+  </div>
+</div>
+
+<!-- CALL SCREEN -->
+<div class="screen hidden" id="callScreen">
+  <video id="remoteVideo" autoplay playsinline></video>
+  <div class="remote-placeholder" id="remotePlaceholder">
+    <div class="big-avatar" id="remoteAvatar">?</div>
+    <p id="connectingText">Connecting...</p>
+  </div>
+
+  <video id="localVideo" autoplay playsinline muted></video>
+
+  <div class="call-header">
+    <div class="call-name" id="callName">Video Call</div>
+    <div class="call-status" id="callStatus">Connecting...</div>
+    <div class="call-timer" id="callTimer" style="display:none">00:00</div>
+  </div>
+
+  <div class="call-controls">
+    <div class="controls-row">
+      <div class="ctrl-item">
+        <button class="ctrl-btn" id="muteBtn">🎙️</button>
+        <span class="ctrl-label">Mute</span>
+      </div>
+      <div class="ctrl-item">
+        <button class="ctrl-btn" id="camBtn">📷</button>
+        <span class="ctrl-label">Camera</span>
+      </div>
+      <div class="ctrl-item">
+        <button class="ctrl-btn end-btn" id="endBtn">📵</button>
+        <span class="ctrl-label" style="color:rgba(255,255,255,0.7)">End</span>
+      </div>
+      <div class="ctrl-item">
+        <button class="ctrl-btn" id="speakerBtn">🔊</button>
+        <span class="ctrl-label">Speaker</span>
+      </div>
+      <div class="ctrl-item">
+        <button class="ctrl-btn" id="flipBtn">🔄</button>
+        <span class="ctrl-label">Flip</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ──
+// Uses free public STUN servers for NAT traversal.
+// For production, add a TURN server (e.g. Twilio, Xirsys).
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' }
+  ]
+};
+
+// ── SIGNALING via PeerJS (free hosted) ──
+// PeerJS wraps WebRTC and provides a free cloud signaling server.
+// Each user gets a unique Peer ID (used as room code).
+const PEERJS_CDN = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+
+// ── STATE ──
+let peer = null;
+let localStream = null;
+let currentCall = null;
+let isMuted = false;
+let isCamOff = false;
+let isFrontCam = true;
+let callSeconds = 0;
+let callTimerInterval = null;
+let myPeerId = null;
+
+// ── UTILS ──
+const $ = id => document.getElementById(id);
+
+function showScreen(id) {
+  ['lobbyScreen','incomingScreen','callScreen'].forEach(s => {
+    $(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+let toastTimeout = null;
+function toast(msg, dur = 2800) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function initials(name) {
+  return (name || '?').trim().split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2) || '?';
+}
+
+function formatTime(s) {
+  return String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
+}
+
+function startTimer() {
+  callSeconds = 0;
+  const timerEl = $('callTimer');
+  timerEl.style.display = 'block';
+  callTimerInterval = setInterval(() => {
+    callSeconds++;
+    timerEl.textContent = formatTime(callSeconds);
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(callTimerInterval);
+  callTimerInterval = null;
+  callSeconds = 0;
+}
+
+// ── CAMERA ──
+async function getStream(facingMode = 'user') {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: { echoCancellation: true, noiseSuppression: true }
+    });
+    return stream;
+  } catch (e) {
+    toast('Camera/mic access denied. Check browser permissions.');
+    throw e;
+  }
+}
+
+// ── PEERJS INIT ──
+function loadPeerJS() {
+  return new Promise((res, rej) => {
+    if (window.Peer) return res();
+    const s = document.createElement('script');
+    s.src = PEERJS_CDN;
+    s.onload = res;
+    s.onerror = () => rej(new Error('Failed to load PeerJS'));
+    document.head.appendChild(s);
+  });
+}
+
+async function initPeer() {
+  await loadPeerJS();
+  const name = $('nameInput').value.trim() || 'User';
+  const customId = $('myRoomCode').value.trim();
+
+  peer = new Peer(customId, {
+    debug: 0,
+    config: ICE_SERVERS
+  });
+
+  peer.on('open', id => {
+    myPeerId = id;
+    $('myRoomCode').value = id;
+    toast('Ready! Share your room code to receive calls.');
+  });
+
+  peer.on('call', incomingCall => {
+    const callerName = incomingCall.metadata?.name || 'Unknown';
+    $('incomingName').textContent = callerName;
+    $('incomingAvatar').textContent = initials(callerName);
+    showScreen('incomingScreen');
+
+    $('answerBtn').onclick = async () => {
+      try {
+        localStream = await getStream();
+        $('localVideo').srcObject = localStream;
+        incomingCall.answer(localStream);
+        setupCall(incomingCall, callerName);
+      } catch(e) {}
+    };
+
+    $('declineBtn').onclick = () => {
+      incomingCall.close();
+      showScreen('lobbyScreen');
+    };
+  });
+
+  peer.on('error', e => {
+    toast('Connection error: ' + e.type);
+    if (e.type === 'unavailable-id') {
+      toast('Room code taken. Try refreshing for a new one.');
+    }
+  });
+
+  peer.on('disconnected', () => {
+    toast('Disconnected from server. Reconnecting...');
+    peer.reconnect();
+  });
+}
+
+// ── SETUP ACTIVE CALL ──
+function setupCall(call, remoteName) {
+  currentCall = call;
+  const myName = $('nameInput').value.trim() || 'Me';
+
+  $('callName').textContent = remoteName || 'Video Call';
+  $('callStatus').textContent = 'Connecting...';
+  $('remoteAvatar').textContent = initials(remoteName);
+  $('connectingText').textContent = 'Waiting for ' + (remoteName || 'the other person') + '...';
+  $('remotePlaceholder').style.display = 'flex';
+  $('remoteVideo').style.display = 'none';
+
+  showScreen('callScreen');
+
+  call.on('stream', remoteStream => {
+    const rv = $('remoteVideo');
+    rv.srcObject = remoteStream;
+    rv.style.display = 'block';
+    $('remotePlaceholder').style.display = 'none';
+    $('callStatus').textContent = 'Connected';
+    startTimer();
+    toast('Connected! Tap the small video to swap views.');
+  });
+
+  call.on('close', () => hangUp(false));
+  call.on('error', e => { toast('Call error'); hangUp(false); });
+}
+
+// ── START CALL (caller side) ──
+async function startCall(roomCode, remoteName) {
+  try {
+    localStream = await getStream();
+    $('localVideo').srcObject = localStream;
+
+    const myName = $('nameInput').value.trim() || 'Me';
+    const call = peer.call(roomCode, localStream, { metadata: { name: myName } });
+    setupCall(call, remoteName || roomCode);
+  } catch(e) {
+    toast('Could not start call. Check camera permissions.');
+  }
+}
+
+// ── HANG UP ──
+function hangUp(notify = true) {
+  stopTimer();
+  if (currentCall) { try { currentCall.close(); } catch(e){} currentCall = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  isMuted = false; isCamOff = false;
+  $('muteBtn').classList.remove('toggled');
+  $('camBtn').classList.remove('toggled');
+  showScreen('lobbyScreen');
+  if (notify) toast('Call ended');
+}
+
+// ── CONTROLS ──
+$('muteBtn').addEventListener('click', () => {
+  isMuted = !isMuted;
+  if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+  $('muteBtn').classList.toggle('toggled', isMuted);
+  $('muteBtn').textContent = isMuted ? '🔇' : '🎙️';
+  const label = $('muteBtn').nextElementSibling;
+  if (label) label.textContent = isMuted ? 'Unmute' : 'Mute';
+  toast(isMuted ? 'Microphone off' : 'Microphone on');
+});
+
+$('camBtn').addEventListener('click', () => {
+  isCamOff = !isCamOff;
+  if (localStream) localStream.getVideoTracks().forEach(t => t.enabled = !isCamOff);
+  $('camBtn').classList.toggle('toggled', isCamOff);
+  $('camBtn').textContent = isCamOff ? '🚫' : '📷';
+  const label = $('camBtn').nextElementSibling;
+  if (label) label.textContent = isCamOff ? 'Start cam' : 'Camera';
+  toast(isCamOff ? 'Camera off' : 'Camera on');
+});
+
+$('endBtn').addEventListener('click', () => hangUp(true));
+
+$('speakerBtn').addEventListener('click', () => {
+  toast('Speaker toggle works on native apps. Use headphones for best audio.');
+});
+
+$('flipBtn').addEventListener('click', async () => {
+  if (!localStream) return;
+  isFrontCam = !isFrontCam;
+  const newStream = await getStream(isFrontCam ? 'user' : 'environment').catch(() => null);
+  if (!newStream) { toast('Flip not supported on this device'); isFrontCam = !isFrontCam; return; }
+  const videoTrack = newStream.getVideoTracks()[0];
+  if (currentCall && currentCall.peerConnection) {
+    const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+    if (sender) await sender.replaceTrack(videoTrack);
+  }
+  localStream.getVideoTracks().forEach(t => t.stop());
+  localStream = newStream;
+  $('localVideo').srcObject = localStream;
+  toast(isFrontCam ? 'Front camera' : 'Back camera');
+});
+
+// ── PIP SWAP ──
+$('localVideo').addEventListener('click', () => {
+  const lv = $('localVideo');
+  const rv = $('remoteVideo');
+  if (rv.srcObject) {
+    const tmp = lv.srcObject;
+    lv.srcObject = rv.srcObject;
+    rv.srcObject = tmp;
+  }
+});
+
+// ── LOBBY ACTIONS ──
+$('copyBtn').addEventListener('click', () => {
+  const code = $('myRoomCode').value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(() => toast('Room code copied!'));
+  } else {
+    $('myRoomCode').select();
+    document.execCommand('copy');
+    toast('Room code copied!');
+  }
+});
+
+$('startBtn').addEventListener('click', async () => {
+  const name = $('nameInput').value.trim();
+  if (!name) { toast('Enter your name first'); $('nameInput').focus(); return; }
+  toast('Starting your room...');
+  await initPeer();
+});
+
+$('joinBtn').addEventListener('click', async () => {
+  const name = $('nameInput').value.trim();
+  const room = $('joinRoomInput').value.trim();
+  if (!name) { toast('Enter your name first'); $('nameInput').focus(); return; }
+  if (!room) { toast('Enter a room code to join'); $('joinRoomInput').focus(); return; }
+  if (!peer) {
+    toast('Setting up connection...');
+    await initPeer();
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  toast('Calling ' + room + '...');
+  await startCall(room, room);
+});
+
+// ── GENERATE ROOM CODE ──
+const adjectives = ['swift','calm','bright','cool','kind','bold','warm','pure'];
+const nouns = ['wave','star','cloud','moon','bird','leaf','river','stone'];
+const adj = adjectives[Math.floor(Math.random()*adjectives.length)];
+const noun = nouns[Math.floor(Math.random()*nouns.length)];
+const num = Math.floor(Math.random()*900)+100;
+const defaultRoom = adj + '-' + noun + '-' + num;
+$('myRoomCode').value = defaultRoom;
+
+// ── PREVENT ZOOM ON DOUBLE TAP ──
+let lastTouch = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTouch < 300) e.preventDefault();
+  lastTouch = now;
+}, { passive: false });
+</script>
+</body>
+</html>
